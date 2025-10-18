@@ -2,7 +2,7 @@
 
 ## 🚀 Quick Install
 ```bash
-curl -fsSL https://raw.githubusercontent.com/GiampaoloGabba/aiexec-cli/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/GiampaoloGabba/aiexec-cli/master/install.sh | bash
 export ANTHROPIC_API_KEY='sk-ant-xxx'
 source ~/.bashrc
 ```

@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="aiexec-logo-full.svg" alt="AI Exec CLI Logo" width="600">
+  <img src="assets/aiexec-logo-full.svg" alt="AI Exec CLI Logo" width="600">
 
   <h3>Fast, secure CLI wrapper for Claude Code</h3>
   <p>Intelligent command generation and execution with built-in safety features</p>
@@ -219,38 +219,95 @@ $ aie -b postgresql performance
 
 ## ⚙️ Advanced Configuration
 
-### Change default model
-Edit in `~/.local/bin/aiexec`:
+### Configuration File
 
+The installer automatically creates `~/.aiexec/config` from `config.template` during installation. This file lets you customize all aspects of AI Exec behavior.
+
+**Location**: `~/.aiexec/config`
+
+**Edit with**:
 ```bash
-DEFAULT_MODEL="claude-sonnet-4-5-20250929"  # instead of Haiku
+nano ~/.aiexec/config
+# or
+vim ~/.aiexec/config
 ```
 
-### Configure AI response language
-Set the language for AI-generated analysis reports (used in `aie` command):
+**Changes take effect immediately** - no restart needed!
+
+### What You Can Configure
+
+#### 1. AI Model Tiers
+Customize which models are used for each tier:
 
 ```bash
-# In your .bashrc/.zshrc
-export AI_RESPONSE_LANG="English"   # Default
-export AI_RESPONSE_LANG="Italian"   # Italian analysis reports
-export AI_RESPONSE_LANG="Spanish"   # Spanish analysis reports
-# ... any language supported by Claude
+# Fast tier (default) - Quick responses, low cost
+MODEL_FAST="claude-haiku-4-5-20251001"
+
+# Balanced tier (-b flag) - Better reasoning, moderate cost
+MODEL_BALANCED="claude-sonnet-4-5-20250929"
+
+# Premium tier (-p flag) - Maximum capability, highest cost
+MODEL_PREMIUM="claude-opus-4-1-20250805"
+
+# Which tier to use by default (fast/balanced/premium)
+DEFAULT_MODEL_TIER="fast"
 ```
 
-**Note**: This only affects AI-generated analysis reports in explore mode (`aie`). All command generation prompts and system messages remain in English.
+#### 2. Behavior Settings
+```bash
+DEFAULT_THINKING="false"              # Enable extended thinking by default
+AI_AIE_AUTO_SMART="true"              # Auto-detect complex prompts in explore mode
+AI_RESPONSE_LANG="English"            # Language for AI analysis reports
+EXPLORE_OUTPUT_MAX_CHARS="4000"       # Max output chars for analysis
+```
+
+**AI Response Language**: Controls the language of analysis reports in `aie` command. Set to "Italian", "Spanish", or any language supported by Claude. Command generation and system messages remain in English.
 
 Example:
 ```bash
-# English analysis (default)
-$ aie show disk usage
-📋 REPORT
-The system shows...
+# Italian analysis reports
+AI_RESPONSE_LANG="Italian"
 
-# Italian analysis
-$ export AI_RESPONSE_LANG="Italian"
 $ aie show disk usage
 📋 REPORT
 Il sistema mostra...
+```
+
+#### 3. Smart Mode Detection
+Fine-tune automatic complexity detection:
+
+```bash
+SMART_MODE_THRESHOLD="2"              # Minimum complexity score (default: 2)
+SMART_MODE_LENGTH_THRESHOLD="150"     # Prompt length threshold (chars)
+SMART_MODE_KEYWORDS=(...)             # 47 complexity keywords (IT+EN)
+SMART_MODE_COMPLEX_TERMS=(...)        # 15 technical terms
+SMART_MODE_MULTISTEP_PATTERN="..."    # Regex for multi-step operations
+```
+
+#### 4. Security
+Extend the safety blacklist with custom patterns:
+
+```bash
+AI_BLACKLIST_EXTRA=""  # Additional patterns for ASK blacklist
+
+# Examples:
+# AI_BLACKLIST_EXTRA="systemctl.*stop.*nginx|docker.*rm.*-f"
+# AI_BLACKLIST_EXTRA="git.*push.*--force|npm.*publish"
+```
+
+### Environment Variables Override
+
+You can temporarily override config settings using environment variables:
+
+```bash
+# Temporary language change
+AI_RESPONSE_LANG="Italian" aie analyze logs
+
+# Disable smart mode detection
+AI_AIE_AUTO_SMART=false aie complex task
+
+# Custom blacklist for one command
+AI_BLACKLIST_EXTRA="pattern1|pattern2" aix command
 ```
 
 ### Add Custom Aliases
@@ -335,29 +392,10 @@ ai -t [your request]
 ai -s [your request]
 ```
 
-## 💰 Cost Management
-
-### Fast tier (default):
-- Input: $1 / 1M tokens
-- Output: $5 / 1M tokens
-- **Recommended for daily use**
-
-### Sonnet 4.5:
-- ~3x cost of Haiku
-- Use only when necessary
-
-### Opus 4.1:
-- ~15x cost of Haiku
-- Reserve for critical tasks
-
-### Thinking:
-- Increases output tokens
-- Use only when complex reasoning is needed
-
 ## 📈 Optimization Tips
 
 1. **Be specific**: "list log files modified today" instead of "log files"
-2. **Use Haiku by default**: switch to Sonnet only if needed
+2. **Use fast tier by default**: switch to balanced/premium only if needed
 3. **Thinking only for complexity**: not needed for simple commands
 4. **Batch commands**: one complex request instead of 10 calls
 

@@ -25,7 +25,17 @@ fi
 # 2. Verify installation
 echo ""
 echo "🔍 Verifying installation..."
-claude doctor || true
+if [ -t 0 ]; then
+    # TTY available - run interactive doctor
+    claude doctor || true
+else
+    # No TTY (curl | bash) - use simple version check
+    if claude --version &> /dev/null; then
+        echo "✓ Claude Code is working"
+    else
+        echo "⚠️  Warning: Could not verify Claude Code installation"
+    fi
+fi
 
 # 3. Create directory for scripts
 mkdir -p ~/.local/bin

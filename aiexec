@@ -468,27 +468,54 @@ init_context() {
   done
   [[ -n "$pkg_mgr" ]] && context+="Package Manager: $pkg_mgr"$'\n'
 
-  # Web server
+  # Web server (with version)
   local web_server=""
   for srv in nginx apache2 httpd lighttpd; do
     if command -v "$srv" >/dev/null 2>&1; then
+      local srv_ver=""
+      case "$srv" in
+        nginx)
+          srv_ver="$($srv -v 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -n1 || echo "")"
+          ;;
+        apache2|httpd)
+          srv_ver="$($srv -v 2>/dev/null | grep -oE 'Apache/[0-9]+\.[0-9]+' | cut -d'/' -f2 || echo "")"
+          ;;
+      esac
       web_server="$srv"
+      [[ -n "$srv_ver" ]] && web_server+=" ($srv_ver)"
       break
     fi
   done
   [[ -n "$web_server" ]] && context+="Web Server: $web_server"$'\n'
 
-  # Database
+  # Database (with versions)
   local databases=()
   for db in mysql mariadb psql postgres postgresql mongod redis-server; do
     if command -v "$db" >/dev/null 2>&1; then
+      local db_name db_ver
       case "$db" in
-        psql|postgres|postgresql) databases+=("postgresql") ;;
-        mariadb) databases+=("mariadb") ;;
-        mysql) databases+=("mysql") ;;
-        mongod) databases+=("mongodb") ;;
-        redis-server) databases+=("redis") ;;
+        psql|postgres|postgresql)
+          db_name="postgresql"
+          db_ver="$(psql --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -n1 || echo "")"
+          ;;
+        mariadb)
+          db_name="mariadb"
+          db_ver="$(mariadb --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo "")"
+          ;;
+        mysql)
+          db_name="mysql"
+          db_ver="$(mysql --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || echo "")"
+          ;;
+        mongod)
+          db_name="mongodb"
+          db_ver="$(mongod --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+' | sed 's/v//' | head -n1 || echo "")"
+          ;;
+        redis-server)
+          db_name="redis"
+          db_ver="$(redis-server --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -n1 || echo "")"
+          ;;
       esac
+      [[ -n "$db_ver" ]] && databases+=("$db_name ($db_ver)") || databases+=("$db_name")
     fi
   done
   # Remove duplicates
@@ -508,14 +535,44 @@ init_context() {
     context+="Container: ${containers[*]}"$'\n'
   fi
 
-  # Control panels
+  # Control panels (with version)
   local panel=""
   if [[ -d /usr/local/psa ]] || command -v plesk >/dev/null 2>&1; then
     panel="Plesk"
+    # Try to get Plesk version and codename
+    if [[ -f /usr/local/psa/version ]]; then
+      local plesk_ver plesk_name
+      plesk_ver="$(head -n1 /usr/local/psa/version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' || echo "")"
+      plesk_name="$(grep -i 'UPDATE_DESCRIPTION' /usr/local/psa/version 2>/dev/null | cut -d'=' -f2 | tr -d '"' | awk '{print $NF}' || echo "")"
+      [[ -n "$plesk_ver" ]] && panel+=" ($plesk_ver"
+      [[ -n "$plesk_name" ]] && panel+=" $plesk_name" || panel+=""
+      [[ -n "$plesk_ver" ]] && panel+=")"
+    fi
   elif [[ -d /usr/local/cpanel ]]; then
     panel="cPanel"
+    # Try to get cPanel version
+    if [[ -f /usr/local/cpanel/version ]]; then
+      local cpanel_ver
+      cpanel_ver="$(cat /usr/local/cpanel/version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -n1 || echo "")"
+      [[ -n "$cpanel_ver" ]] && panel+=" ($cpanel_ver)"
+    fi
   fi
   [[ -n "$panel" ]] && context+="Control Panel: $panel"$'\n'
+
+  # Init system (for service management commands)
+  local init_sys=""
+  if [[ -d /run/systemd/system ]]; then
+    init_sys="systemd"
+  elif command -v systemctl >/dev/null 2>&1; then
+    init_sys="systemd"
+  elif [[ -f /sbin/init ]] && [[ -L /sbin/init ]]; then
+    # Check if init is a symlink (common with systemd)
+    local init_target
+    init_target="$(readlink -f /sbin/init 2>/dev/null || echo "")"
+    [[ "$init_target" =~ systemd ]] && init_sys="systemd"
+  fi
+  # Only add if systemd (default assumption is sysvinit/other)
+  [[ -n "$init_sys" ]] && context+="Init: $init_sys"$'\n'
 
   # Programming languages (only common ones, with versions)
   local langs=()
@@ -706,7 +763,7 @@ Question: $PROMPT"
   local response
   response="$(claude -p \
     --model "$MODEL" \
-    --max-turns 1 \
+    --max-turns 5 \
     --output-format text \
     "$full_prompt" 2>/dev/null || true)"
 

@@ -120,6 +120,7 @@ FLAGS:
   -r, --raw           Don't clean Claude's output
   -n, --dry-run       Show what would run (for aix/aie), don't execute
   --no-clipboard      Disable auto-copy to clipboard (for ai mode)
+  --init              Initialize context file with system information
   --install-aliases   Create symlinks ai/aix/aie/aic in ~/.local/bin
   -h, --help          Show this help
 
@@ -415,6 +416,153 @@ prompt_thinking_mode() {
   done
 }
 
+# ---------- Initialize context file ----------
+init_context() {
+  local context_dir="$HOME/.aiexec"
+  local context_file="$context_dir/context.txt"
+
+  mkdir -p "$context_dir"
+
+  printf "🔍 Detecting system information...\n" >&2
+
+  # Start building context
+  local context=""
+
+  # OS and kernel info
+  local os_name kernel_release arch
+  os_name="$(uname -s 2>/dev/null || echo "Unknown")"
+  kernel_release="$(uname -r 2>/dev/null || echo "Unknown")"
+  arch="$(uname -m 2>/dev/null || echo "Unknown")"
+
+  # Linux distribution (if applicable)
+  local distro=""
+  if [[ "$os_name" == "Linux" ]] && [[ -f /etc/os-release ]]; then
+    distro="$(grep -E '^PRETTY_NAME=' /etc/os-release 2>/dev/null | cut -d'"' -f2 || echo "")"
+  fi
+
+  context+="System: $os_name $kernel_release $arch"
+  [[ -n "$distro" ]] && context+=", $distro"
+  context+=$'\n'
+
+  # Shell
+  local shell_path shell_version
+  shell_path="${SHELL:-/bin/bash}"
+  shell_version=""
+  if [[ -x "$shell_path" ]]; then
+    case "$(basename "$shell_path")" in
+      bash) shell_version="$($shell_path --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "")" ;;
+      zsh)  shell_version="$($shell_path --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' || echo "")" ;;
+    esac
+  fi
+  context+="Shell: $shell_path"
+  [[ -n "$shell_version" ]] && context+=" ($shell_version)"
+  context+=$'\n'
+
+  # Package manager
+  local pkg_mgr=""
+  for mgr in apt yum dnf pacman zypper brew apk; do
+    if command -v "$mgr" >/dev/null 2>&1; then
+      pkg_mgr="$mgr"
+      break
+    fi
+  done
+  [[ -n "$pkg_mgr" ]] && context+="Package Manager: $pkg_mgr"$'\n'
+
+  # Web server
+  local web_server=""
+  for srv in nginx apache2 httpd lighttpd; do
+    if command -v "$srv" >/dev/null 2>&1; then
+      web_server="$srv"
+      break
+    fi
+  done
+  [[ -n "$web_server" ]] && context+="Web Server: $web_server"$'\n'
+
+  # Database
+  local databases=()
+  for db in mysql mariadb psql postgres postgresql mongod redis-server; do
+    if command -v "$db" >/dev/null 2>&1; then
+      case "$db" in
+        psql|postgres|postgresql) databases+=("postgresql") ;;
+        mariadb) databases+=("mariadb") ;;
+        mysql) databases+=("mysql") ;;
+        mongod) databases+=("mongodb") ;;
+        redis-server) databases+=("redis") ;;
+      esac
+    fi
+  done
+  # Remove duplicates
+  databases=($(printf '%s\n' "${databases[@]}" | sort -u))
+  if [[ ${#databases[@]} -gt 0 ]]; then
+    context+="Database: ${databases[*]}"$'\n'
+  fi
+
+  # Containerization / Virtualization
+  local containers=()
+  for tool in docker podman lxc; do
+    if command -v "$tool" >/dev/null 2>&1; then
+      containers+=("$tool")
+    fi
+  done
+  if [[ ${#containers[@]} -gt 0 ]]; then
+    context+="Container: ${containers[*]}"$'\n'
+  fi
+
+  # Control panels
+  local panel=""
+  if [[ -d /usr/local/psa ]] || command -v plesk >/dev/null 2>&1; then
+    panel="Plesk"
+  elif [[ -d /usr/local/cpanel ]]; then
+    panel="cPanel"
+  fi
+  [[ -n "$panel" ]] && context+="Control Panel: $panel"$'\n'
+
+  # Programming languages (only common ones, with versions)
+  local langs=()
+
+  if command -v python3 >/dev/null 2>&1; then
+    local pyver
+    pyver="$(python3 --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' || echo "")"
+    [[ -n "$pyver" ]] && langs+=("python3 ($pyver)") || langs+=("python3")
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    local nodever
+    nodever="$(node --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' || echo "")"
+    [[ -n "$nodever" ]] && langs+=("node ($nodever)") || langs+=("node")
+  fi
+
+  if command -v php >/dev/null 2>&1; then
+    local phpver
+    phpver="$(php --version 2>/dev/null | head -n1 | grep -oE '[0-9]+\.[0-9]+' || echo "")"
+    [[ -n "$phpver" ]] && langs+=("php ($phpver)") || langs+=("php")
+  fi
+
+  if command -v ruby >/dev/null 2>&1; then
+    local rubyver
+    rubyver="$(ruby --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' || echo "")"
+    [[ -n "$rubyver" ]] && langs+=("ruby ($rubyver)") || langs+=("ruby")
+  fi
+
+  if command -v go >/dev/null 2>&1; then
+    local gover
+    gover="$(go version 2>/dev/null | grep -oE 'go[0-9]+\.[0-9]+' | sed 's/go//' || echo "")"
+    [[ -n "$gover" ]] && langs+=("go ($gover)") || langs+=("go")
+  fi
+
+  if [[ ${#langs[@]} -gt 0 ]]; then
+    context+="Languages: ${langs[*]}"$'\n'
+  fi
+
+  # Write to file
+  printf '%s' "$context" > "$context_file"
+
+  printf "✅ Context file created: %s\n\n" "$context_file" >&2
+  printf "📄 Content:\n" >&2
+  printf "%s" "$context" | sed 's/^/   /' >&2
+  printf "\n" >&2
+}
+
 # ---------- Install aliases (symlinks) ----------
 install_aliases() {
   local self
@@ -460,6 +608,7 @@ esac
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --init)            init_context; exit 0 ;;
     --install-aliases) install_aliases ;;
     -v|--version)      show_version; exit 0 ;;
     -t|--thinking)     THINKING="true"; USER_SET_THINKING=1; shift ;;

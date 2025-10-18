@@ -91,6 +91,16 @@ else
     echo "✓ Existing configuration preserved: ~/.aiexec/config"
 fi
 
+# 4.7. Initialize context file with system information
+echo ""
+echo "🔍 Initializing system context..."
+if ~/.local/bin/aiexec --init; then
+    echo "✓ Context initialized"
+else
+    echo "⚠️  Warning: Failed to initialize context file" >&2
+    echo "   You can run 'aiexec --init' manually later" >&2
+fi
+
 # 5. Create aliases
 echo ""
 echo "🔗 Creating aliases..."
@@ -211,6 +221,17 @@ echo "   • Security blacklist patterns"
 echo ""
 echo "   Edit with: nano ~/.aiexec/config"
 echo "   Or:        vim ~/.aiexec/config"
+echo ""
+echo "📄 CONTEXT FILE:"
+echo "   Location: ~/.aiexec/context.txt"
+echo ""
+echo "   Contains system information (auto-detected):"
+echo "   • OS, shell, package manager"
+echo "   • Web server, database, containers"
+echo "   • Programming languages"
+echo ""
+echo "   Automatically included in all AI prompts."
+echo "   Re-run 'aiexec --init' to update if system changes."
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📖 For all flags and examples: ai --help"

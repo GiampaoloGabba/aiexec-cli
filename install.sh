@@ -106,19 +106,29 @@ else
     exit 1
 fi
 
-# Backup config file
-cp "$SHELL_RC" "${SHELL_RC}.backup.$(date +%Y%m%d_%H%M%S)"
+echo "📝 Using config file: $SHELL_RC"
 
-# Remove old aliases if they exist
+# Backup config file with timestamp
+BACKUP_FILE="${SHELL_RC}.backup.$(date +%Y%m%d_%H%M%S)"
+cp "$SHELL_RC" "$BACKUP_FILE"
+echo "📦 Backup created: $BACKUP_FILE"
+
+# Remove old aliases if they exist (more robust method)
 if grep -q "# AI Exec aliases" "$SHELL_RC"; then
     echo "🔄 Removing old aliases..."
-    # Remove from "# AI Exec aliases" line until next empty line
-    sed -i.bak '/# AI Exec aliases/,/^$/d' "$SHELL_RC"
+    # Use a simple approach that works on both Linux and macOS
+    # Remove lines from "# AI Exec aliases" until the first empty line after it
+    awk '
+        /# AI Exec aliases/ { skip=1; next }
+        skip && /^$/ { skip=0; next }
+        skip { next }
+        { print }
+    ' "$SHELL_RC" > "${SHELL_RC}.tmp" && mv "${SHELL_RC}.tmp" "$SHELL_RC"
 fi
 
 # Add new aliases
+echo "" >> "$SHELL_RC"
 cat >> "$SHELL_RC" << 'EOFALIAS'
-
 # AI Exec aliases - Secure interface for Claude Code
 export PATH="$HOME/.local/bin:$PATH"
 alias ai='aiexec simple'
@@ -129,9 +139,15 @@ alias ait='aiexec simple --thinking'
 alias aib='aiexec simple --balanced'
 alias aixt='aiexec exec --thinking'
 alias aiet='aiexec explore --thinking'
-
 EOFALIAS
-echo "✓ Aliases added to $SHELL_RC"
+
+# Verify aliases were added
+if grep -q "alias ai=" "$SHELL_RC"; then
+    echo "✓ Aliases added to $SHELL_RC"
+else
+    echo "❌ Error: Failed to add aliases to $SHELL_RC" >&2
+    echo "   You can add them manually later" >&2
+fi
 
 # 6. Final instructions
 echo ""
@@ -173,8 +189,10 @@ echo "1. Configure your API key:"
 echo "   export ANTHROPIC_API_KEY='your-key-here'"
 echo "   echo 'export ANTHROPIC_API_KEY=\"your-key-here\"' >> $SHELL_RC"
 echo ""
-echo "2. Reload shell:"
+echo "2. 🔄 RELOAD YOUR SHELL (REQUIRED!):"
 echo "   source $SHELL_RC"
+echo ""
+echo "   Or open a new terminal window/tab"
 echo ""
 echo "3. Test the system:"
 echo "   ai --help"
@@ -196,3 +214,8 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📖 For all flags and examples: ai --help"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "⚠️  IMPORTANT: Run this command now to activate aliases:"
+echo ""
+echo "    source $SHELL_RC"
+echo ""

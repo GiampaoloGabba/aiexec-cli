@@ -239,27 +239,21 @@ vim ~/.aiexec/config
 #### 1. AI Model Tiers
 Customize which models are used for each tier:
 
-```bash
-# Fast tier (default) - Quick responses, low cost
-MODEL_FAST="claude-haiku-4-5-20251001"
-
-# Balanced tier (-b flag) - Better reasoning, moderate cost
-MODEL_BALANCED="claude-sonnet-4-5-20250929"
-
-# Premium tier (-p flag) - Maximum capability, highest cost
-MODEL_PREMIUM="claude-opus-4-1-20250805"
-
-# Which tier to use by default (fast/balanced/premium)
-DEFAULT_MODEL_TIER="fast"
-```
+| Variable | Default Value | Description |
+|----------|---------------|-------------|
+| `MODEL_FAST` | `claude-haiku-4-5-20251001` | Fast tier (default) - Quick responses, low cost |
+| `MODEL_BALANCED` | `claude-sonnet-4-5-20250929` | Balanced tier (`-b` flag) - Better reasoning, moderate cost |
+| `MODEL_PREMIUM` | `claude-opus-4-1-20250805` | Premium tier (`-p` flag) - Maximum capability, highest cost |
+| `DEFAULT_MODEL_TIER` | `fast` | Which tier to use by default (`fast`/`balanced`/`premium`) |
 
 #### 2. Behavior Settings
-```bash
-DEFAULT_THINKING="false"              # Enable extended thinking by default
-AI_AIE_AUTO_SMART="true"              # Auto-detect complex prompts in explore mode
-AI_RESPONSE_LANG="English"            # Language for AI analysis reports
-EXPLORE_OUTPUT_MAX_CHARS="4000"       # Max output chars for analysis
-```
+
+| Variable | Default Value | Description |
+|----------|---------------|-------------|
+| `DEFAULT_THINKING` | `false` | Enable extended thinking by default |
+| `AI_AIE_AUTO_SMART` | `true` | Auto-detect complex prompts in explore mode |
+| `AI_RESPONSE_LANG` | `English` | Language for AI analysis reports (any language supported by Claude) |
+| `EXPLORE_OUTPUT_MAX_CHARS` | `4000` | Max output chars for analysis |
 
 **AI Response Language**: Controls the language of analysis reports in `aie` command. Set to "Italian", "Spanish", or any language supported by Claude. Command generation and system messages remain in English.
 
@@ -276,23 +270,25 @@ Il sistema mostra...
 #### 3. Smart Mode Detection
 Fine-tune automatic complexity detection:
 
-```bash
-SMART_MODE_THRESHOLD="2"              # Minimum complexity score (default: 2)
-SMART_MODE_LENGTH_THRESHOLD="150"     # Prompt length threshold (chars)
-SMART_MODE_KEYWORDS=(...)             # 47 complexity keywords (IT+EN)
-SMART_MODE_COMPLEX_TERMS=(...)        # 15 technical terms
-SMART_MODE_MULTISTEP_PATTERN="..."    # Regex for multi-step operations
-```
+| Variable | Default Value | Description |
+|----------|---------------|-------------|
+| `SMART_MODE_THRESHOLD` | `2` | Minimum complexity score to trigger smart mode |
+| `SMART_MODE_LENGTH_THRESHOLD` | `150` | Prompt length threshold (characters) |
+| `SMART_MODE_KEYWORDS` | (array) | 47 complexity keywords (Italian + English) |
+| `SMART_MODE_COMPLEX_TERMS` | (array) | 15 technical terms |
+| `SMART_MODE_MULTISTEP_PATTERN` | (regex) | Regex pattern for multi-step operations |
 
 #### 4. Security
 Extend the safety blacklist with custom patterns:
 
-```bash
-AI_BLACKLIST_EXTRA=""  # Additional patterns for ASK blacklist
+| Variable | Default Value | Description |
+|----------|---------------|-------------|
+| `AI_BLACKLIST_EXTRA` | `""` | Additional patterns for ASK blacklist (pipe-separated regex) |
 
-# Examples:
-# AI_BLACKLIST_EXTRA="systemctl.*stop.*nginx|docker.*rm.*-f"
-# AI_BLACKLIST_EXTRA="git.*push.*--force|npm.*publish"
+**Examples:**
+```bash
+AI_BLACKLIST_EXTRA="systemctl.*stop.*nginx|docker.*rm.*-f"
+AI_BLACKLIST_EXTRA="git.*push.*--force|npm.*publish"
 ```
 
 ### Environment Variables Override

@@ -44,15 +44,22 @@ mkdir -p ~/.local/bin
 echo ""
 echo "📝 Installing wrapper script..."
 
-# If script is in the same directory
+# Determine if we're running from local repo or remote install
 if [ -f "./aiexec" ]; then
+    # Local installation (git clone)
     cp ./aiexec ~/.local/bin/aiexec
-elif [ -f "/tmp/aiexec" ]; then
-    cp /tmp/aiexec ~/.local/bin/aiexec
+    echo "✓ Installed from local repository"
 else
-    echo "❌ Error: aiexec file not found" >&2
-    echo "Make sure it's in the current directory or /tmp" >&2
-    exit 1
+    # Remote installation (curl | bash) - download from GitHub
+    echo "📥 Downloading aiexec from GitHub..."
+    GITHUB_RAW="https://raw.githubusercontent.com/GiampaoloGabba/aiexec-cli/master"
+
+    if curl -fsSL "$GITHUB_RAW/aiexec" -o ~/.local/bin/aiexec; then
+        echo "✓ Downloaded aiexec successfully"
+    else
+        echo "❌ Error: Failed to download aiexec from GitHub" >&2
+        exit 1
+    fi
 fi
 
 chmod +x ~/.local/bin/aiexec
@@ -65,14 +72,20 @@ mkdir -p ~/.aiexec
 # Only copy config if it doesn't exist (preserve user customizations)
 if [ ! -f ~/.aiexec/config ]; then
     if [ -f "./config.template" ]; then
+        # Local installation
         cp ./config.template ~/.aiexec/config
         echo "✓ Configuration file created: ~/.aiexec/config"
-    elif [ -f "/tmp/config.template" ]; then
-        cp /tmp/config.template ~/.aiexec/config
-        echo "✓ Configuration file created: ~/.aiexec/config"
     else
-        echo "⚠️  Warning: config.template not found, using defaults" >&2
-        echo "   You can create ~/.aiexec/config manually later" >&2
+        # Remote installation - download from GitHub
+        echo "📥 Downloading configuration template from GitHub..."
+        GITHUB_RAW="https://raw.githubusercontent.com/GiampaoloGabba/aiexec-cli/master"
+
+        if curl -fsSL "$GITHUB_RAW/config.template" -o ~/.aiexec/config; then
+            echo "✓ Configuration file created: ~/.aiexec/config"
+        else
+            echo "⚠️  Warning: Failed to download config.template, using defaults" >&2
+            echo "   You can create ~/.aiexec/config manually later" >&2
+        fi
     fi
 else
     echo "✓ Existing configuration preserved: ~/.aiexec/config"

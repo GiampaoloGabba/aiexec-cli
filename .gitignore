@@ -1,0 +1,33 @@
+# Claude Code local settings (personal preferences)
+.claude/settings.local.json
+.claude/*.local.json
+
+# Backup files
+*.bak
+*.backup
+*~
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Installation logs
+install_*.log
+
+# Test output
+test_output/
+*.test
+
+# API Keys (extra safety - should be in env, but just in case)
+.env
+.env.local
+*_key.txt
+*_token.txt
+
+# Editor directories
+.vscode/
+.idea/
+*.code-workspace

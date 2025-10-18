@@ -1,0 +1,113 @@
+# =============================================================================
+# AI Exec CLI - Configuration File
+# =============================================================================
+# Location: ~/.aiexec/config
+# This file is sourced by aiexec at startup
+#
+# After editing, test with: ai --help
+# Verify settings with: ai --version
+
+# ---------- AI Models Configuration ----------
+# Model tiers: fast (economical) / balanced (powerful) / premium (maximum capability)
+
+# Fast model (default) - Quick responses, low cost
+# Best for: simple commands, daily use, exploration
+MODEL_FAST="claude-haiku-4-5-20251001"
+
+# Balanced model (-b flag) - Better reasoning, moderate cost
+# Best for: complex tasks, analysis, code generation
+MODEL_BALANCED="claude-sonnet-4-5-20250929"
+
+# Premium model (-p flag) - Maximum capability, highest cost
+# Best for: very complex tasks, critical decisions, deep analysis
+MODEL_PREMIUM="claude-opus-4-1-20250805"
+
+# ---------- Default Behavior ----------
+
+# Which tier to use by default (fast/balanced/premium)
+DEFAULT_MODEL_TIER="fast"
+
+# Enable extended thinking by default (true/false)
+# Increases reasoning quality but also latency and cost
+DEFAULT_THINKING="false"
+
+# ---------- Explore Mode (aie) Settings ----------
+
+# Auto-detect complex prompts and offer smart mode (balanced + thinking)
+# When enabled, shows interactive prompt for complex queries
+# Set to "false" to always use default model in explore mode
+AI_AIE_AUTO_SMART="true"
+
+# Language for AI analysis reports in explore mode
+# Examples: "English", "Italian", "Spanish", "French", "German", "Portuguese"
+AI_RESPONSE_LANG="English"
+
+# Maximum characters to send for analysis (prevents context overflow)
+EXPLORE_OUTPUT_MAX_CHARS="4000"
+
+# ---------- Smart Mode Detection Thresholds ----------
+
+# Minimum score to trigger smart mode suggestion (default: 2)
+# Score is calculated from: length + keywords + complex_terms + multi_step
+# Each category can contribute 1-2 points to the total score
+SMART_MODE_THRESHOLD="2"
+
+# Prompt length threshold in characters (adds +1 to score if exceeded)
+SMART_MODE_LENGTH_THRESHOLD="150"
+
+# Complexity keywords (Italian + English)
+# Each match adds to score (max 2 points: 1 match=+1, 2+ matches=+2)
+# These patterns use extended regex (grep -E compatible)
+SMART_MODE_KEYWORDS=(
+  # Italiano
+  'analiz[zs][aie]' 'debug' 'spieg[ah]' 'perch[eé]' 'confront[aio]'
+  'ottimiz[zs][aie]' 'performance' 'problem[ai]' 'error[ei]' 'lent[oi]'
+  'crash' 'trov[aio]' 'cerc[ah]' 'identific[ah]' 'risolv[ei]'
+  'miglior[aie]' 'verific[ah]' 'controll[ah]' 'diagnostic[ah]'
+  'complex' 'dettag' 'approfond'
+  # English
+  'analyz[ei]' 'explain' 'why' 'compar[ei]' 'optimi[zs][ei]'
+  'troubleshoot' 'diagnos[ei]' 'investiga' 'identif[yi]' 'solv[ei]'
+  'improv[ei]' 'verif[yi]' 'check' 'inspect' 'examine'
+  'find' 'search' 'detect' 'discover' 'trace'
+  'slow' 'issue' 'bug' 'fail' 'broken' 'detailed'
+)
+
+# Complex technical terms (commands and concepts)
+# Each match adds to score (max 2 points: 1 match=+1, 2+ matches=+2)
+SMART_MODE_COMPLEX_TERMS=(
+  'awk' 'sed' 'regex' 'grep[[:space:]]+-E' 'find.*-exec'
+  'database' 'sql' 'network' 'tcp' 'socket'
+  'profiling' 'memory[[:space:]]+leak' 'race[[:space:]]+condition'
+  'permission' 'firewall' 'security' 'vulnerabilit'
+  'systemctl' 'journalctl' 'docker' 'kubernetes'
+)
+
+# Multi-step indicators pattern (adds +1 to score if matched)
+# Italian and English patterns for sequential operations
+SMART_MODE_MULTISTEP_PATTERN='(e poi|dopo|se .* allora|quindi .* e|prima .* poi|and then|after|if .* then|first .* then|then .*)'
+
+# ---------- Security - Blacklist Extensions ----------
+
+# Add custom patterns to the ASK blacklist (requires user confirmation)
+# Format: "pattern1|pattern2|pattern3"
+# These are ADDED to the built-in blacklist, not replaced
+# Use extended regex syntax (grep -E compatible)
+#
+# Examples:
+#   AI_BLACKLIST_EXTRA="systemctl.*stop.*nginx|docker.*rm.*-f"
+#   AI_BLACKLIST_EXTRA="git.*push.*--force|npm.*publish"
+#   AI_BLACKLIST_EXTRA="kubectl.*delete|terraform.*destroy"
+#
+# Leave empty for no custom patterns
+AI_BLACKLIST_EXTRA=""
+
+# ---------- Advanced Settings ----------
+
+# Fast text processing locale (leave as C for maximum performance)
+# DO NOT CHANGE unless you have specific locale requirements
+export LC_ALL=C
+
+# =============================================================================
+# End of configuration
+# =============================================================================

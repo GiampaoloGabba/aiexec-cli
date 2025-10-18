@@ -1,0 +1,65 @@
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background gradient -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1b4b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f172a;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="glowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:0.8" />
+      <stop offset="50%" style="stop-color:#22d3ee;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#10b981;stop-opacity:0.8" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" fill="url(#bgGradient)" rx="80"/>
+  
+  <!-- Glow effect circle -->
+  <circle cx="256" cy="240" r="160" fill="url(#glowGradient)" opacity="0.15" filter="blur(30px)"/>
+  
+  <!-- Main icon container -->
+  <g transform="translate(256, 200)">
+    <!-- AI Brain stylized -->
+    <g transform="translate(-80, -60)">
+      <!-- Brain outline - larger and bolder -->
+      <path d="M 80 20 Q 55 5, 30 20 Q 10 35, 10 65 Q 10 95, 30 110 Q 55 125, 80 110 Q 105 125, 130 110 Q 150 95, 150 65 Q 150 35, 130 20 Q 105 5, 80 20 Z" 
+            fill="none" stroke="#a78bfa" stroke-width="6" stroke-linecap="round"/>
+      
+      <!-- Neural network nodes - larger -->
+      <circle cx="45" cy="50" r="8" fill="#c4b5fd"/>
+      <circle cx="80" cy="35" r="8" fill="#c4b5fd"/>
+      <circle cx="115" cy="50" r="8" fill="#c4b5fd"/>
+      <circle cx="55" cy="80" r="8" fill="#c4b5fd"/>
+      <circle cx="105" cy="80" r="8" fill="#c4b5fd"/>
+      <circle cx="80" cy="95" r="8" fill="#c4b5fd"/>
+      
+      <!-- Connections with glow -->
+      <line x1="45" y1="50" x2="80" y2="35" stroke="#8b5cf6" stroke-width="4" opacity="0.7"/>
+      <line x1="80" y1="35" x2="115" y2="50" stroke="#8b5cf6" stroke-width="4" opacity="0.7"/>
+      <line x1="45" y1="50" x2="55" y2="80" stroke="#22d3ee" stroke-width="4" opacity="0.7"/>
+      <line x1="115" y1="50" x2="105" y2="80" stroke="#22d3ee" stroke-width="4" opacity="0.7"/>
+      <line x1="55" y1="80" x2="80" y2="95" stroke="#10b981" stroke-width="4" opacity="0.7"/>
+      <line x1="105" y1="80" x2="80" y2="95" stroke="#10b981" stroke-width="4" opacity="0.7"/>
+    </g>
+  </g>
+  
+  <!-- Terminal prompt symbol -->
+  <g transform="translate(156, 310)">
+    <!-- Terminal window backdrop -->
+    <rect x="0" y="0" width="200" height="100" rx="12" fill="#0f172a" opacity="0.8"/>
+    <rect x="0" y="0" width="200" height="100" rx="12" fill="none" stroke="#10b981" stroke-width="4"/>
+    
+    <!-- Command prompt -->
+    <text x="20" y="68" font-family="'Courier New', monospace" font-size="56" font-weight="bold" fill="#10b981">&gt;_</text>
+  </g>
+  
+  <!-- "aiexec" text at bottom -->
+  <text x="256" y="455" font-family="'Courier New', monospace" font-size="38" font-weight="bold" fill="#e2e8f0" text-anchor="middle">
+    aiexec
+  </text>
+  <text x="256" y="480" font-family="Arial, sans-serif" font-size="18" fill="#64748b" text-anchor="middle">
+    cli
+  </text>
+</svg>

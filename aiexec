@@ -1,0 +1,572 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# =============================================================================
+# AI Exec - Fast and secure interface for Claude Code
+# =============================================================================
+
+# ---------- Load Configuration ----------
+# Config file location: ~/.aiexec/config
+CONFIG_FILE="$HOME/.aiexec/config"
+if [[ -f "$CONFIG_FILE" ]]; then
+  # shellcheck source=/dev/null
+  source "$CONFIG_FILE"
+fi
+
+# ---------- Default Configuration (fallback if config not present) ----------
+# Model tiers
+MODEL_FAST="${MODEL_FAST:-claude-haiku-4-5-20251001}"
+MODEL_BALANCED="${MODEL_BALANCED:-claude-sonnet-4-5-20250929}"
+MODEL_PREMIUM="${MODEL_PREMIUM:-claude-opus-4-1-20250805}"
+
+# Default behavior
+DEFAULT_MODEL_TIER="${DEFAULT_MODEL_TIER:-fast}"
+DEFAULT_THINKING="${DEFAULT_THINKING:-false}"
+
+# Explore mode settings
+AI_AIE_AUTO_SMART="${AI_AIE_AUTO_SMART:-true}"
+AI_RESPONSE_LANG="${AI_RESPONSE_LANG:-English}"
+EXPLORE_OUTPUT_MAX_CHARS="${EXPLORE_OUTPUT_MAX_CHARS:-4000}"
+
+# Smart mode detection thresholds
+SMART_MODE_THRESHOLD="${SMART_MODE_THRESHOLD:-2}"
+SMART_MODE_LENGTH_THRESHOLD="${SMART_MODE_LENGTH_THRESHOLD:-150}"
+
+# Smart mode keywords (if not defined in config)
+if [[ ! -v SMART_MODE_KEYWORDS ]]; then
+  SMART_MODE_KEYWORDS=(
+    # Italiano
+    'analiz[zs][aie]' 'debug' 'spieg[ah]' 'perch[eé]' 'confront[aio]'
+    'ottimiz[zs][aie]' 'performance' 'problem[ai]' 'error[ei]' 'lent[oi]'
+    'crash' 'trov[aio]' 'cerc[ah]' 'identific[ah]' 'risolv[ei]'
+    'miglior[aie]' 'verific[ah]' 'controll[ah]' 'diagnostic[ah]'
+    'complex' 'dettag' 'approfond'
+    # English
+    'analyz[ei]' 'explain' 'why' 'compar[ei]' 'optimi[zs][ei]'
+    'troubleshoot' 'diagnos[ei]' 'investiga' 'identif[yi]' 'solv[ei]'
+    'improv[ei]' 'verif[yi]' 'check' 'inspect' 'examine'
+    'find' 'search' 'detect' 'discover' 'trace'
+    'slow' 'issue' 'bug' 'fail' 'broken' 'detailed'
+  )
+fi
+
+# Smart mode complex terms (if not defined in config)
+if [[ ! -v SMART_MODE_COMPLEX_TERMS ]]; then
+  SMART_MODE_COMPLEX_TERMS=(
+    'awk' 'sed' 'regex' 'grep[[:space:]]+-E' 'find.*-exec'
+    'database' 'sql' 'network' 'tcp' 'socket'
+    'profiling' 'memory[[:space:]]+leak' 'race[[:space:]]+condition'
+    'permission' 'firewall' 'security' 'vulnerabilit'
+    'systemctl' 'journalctl' 'docker' 'kubernetes'
+  )
+fi
+
+# Smart mode multi-step pattern (if not defined in config)
+SMART_MODE_MULTISTEP_PATTERN="${SMART_MODE_MULTISTEP_PATTERN:-(e poi|dopo|se .* allora|quindi .* e|prima .* poi|and then|after|if .* then|first .* then|then .*)}"
+
+# Security blacklist extensions
+AI_BLACKLIST_EXTRA="${AI_BLACKLIST_EXTRA:-}"
+
+# Fast, deterministic text processing
+export LC_ALL="${LC_ALL:-C}"
+
+# ---------- Script State Variables ----------
+FORCE=0
+RAW=0
+DRYRUN=0
+
+# Ensure claude CLI is present
+command -v claude >/dev/null 2>&1 || {
+  printf '❌ Error: "claude" CLI not found in PATH.\n' 1>&2
+  printf '   Install with:  curl -fsSL https://claude.ai/install.sh | bash\n' 1>&2
+  exit 127
+}
+
+# ---------- Utility ----------
+show_version() {
+  printf '\n'
+  printf '\033[38;5;48m         \033[38;5;48m   \033[38;5;214m _____ \033[38;5;208m__  __ \033[38;5;202m _____ \033[38;5;196m ____ \033[0m\n'
+  printf '\033[38;5;48m   /\   \033[38;5;48m ░░ \033[38;5;214m| ____|\033[38;5;208m\ \/ / \033[38;5;202m| ____|\033[38;5;196m/ ___|\033[0m\n'
+  printf '\033[38;5;48m  /  \  \033[38;5;48m ░░ \033[38;5;214m|  _|  \033[38;5;208m \  /  \033[38;5;202m|  _|  \033[38;5;196m| |    \033[0m\n'
+  printf '\033[38;5;48m / /\ \ \033[38;5;48m ░░ \033[38;5;214m| |___ \033[38;5;208m /  \  \033[38;5;202m| |___ \033[38;5;196m| |___ \033[0m\n'
+  printf '\033[38;5;48m/_/  \_\\\033[38;5;48m ░░ \033[38;5;214m|_____|\033[38;5;208m/_/\_\ \033[38;5;202m|_____|\033[38;5;196m\____|\033[0m\n'
+  printf '\n         🤖 \033[1;32mAI\033[0m → 💻 \033[1;38;5;208mCommand Execution\033[0m  ⚡\n\n'
+  printf 'AI Exec CLI v1.0.0\nFast, secure wrapper for Claude Code\n\n'
+  printf 'Author: Giampaolo Gabba\nRepository: github.com/GiampaoloGabba/aiexec-cli\n\n'
+}
+
+show_help() {
+  echo ""
+  echo -e "\033[38;5;40mA\033[38;5;46mI\033[38;5;82mE\033[38;5;118mX\033[38;5;154mE\033[38;5;190mC\033[0m  \033[38;5;46m•\033[0m  \033[38;5;118mC\033[38;5;154mL\033[38;5;190mI\033[0m"
+  echo -e "\033[38;5;46mAI\033[0m \033[38;5;118m→\033[0m \033[38;5;154mCommand\033[0m \033[38;5;118m→\033[0m \033[38;5;82mExecution\033[0m  \033[38;5;190m(aiexec-cli)\033[0m"
+  echo ""
+cat << 'HELP'
+AI Exec — Fast and secure interface for Claude Code
+
+USAGE (auto-dispatch by executable name):
+  ai   "<prompt>"     # Generate command only (SAFE)
+  aix  "<prompt>"     # Execute command (with blacklist)
+  aie  "<prompt>"     # Execute + analyze (with blacklist)
+
+FLAGS:
+  -v, --version       Show version information
+  -t, --thinking      Use extended thinking (slightly slower, better reasoning)
+  -b, --balanced      Use balanced tier model (better performance)
+  -p, --premium       Use premium tier model (maximum capability)
+  -m, --model <name>  Use specific model name
+  -f, --force         Bypass blacklist (DANGEROUS!)
+  -r, --raw           Don't clean Claude's output
+  -n, --dry-run       Show what would run (for aix/aie), don't execute
+  --install-aliases   Create symlinks ai/aix/aie in ~/.local/bin
+  -h, --help          Show this help
+
+EXAMPLES:
+  ai  "list files in current directory"
+  aix "find all python files"
+  aie "show disk usage"
+  ai  -b "create database backup"
+  aie -p "analyze complex system architecture"
+  aix --force "risky command"     # bypass blacklist
+
+SECURITY:
+  aix/aie enforce a BLACKLIST:
+  - BLOCK: fork bomb, rm -rf /, disk formatting, mkfs, etc.
+  - ASK:   find -delete on /, recursive chmod/chown, shutdown/reboot, etc.
+
+  Configure in: ~/.aiexec/config
+
+MODELS:
+  Default: Fast tier (quick, economical)
+  -b:      Balanced tier (better reasoning, moderate cost)
+  -p:      Premium tier (maximum capability, higher cost)
+
+  Configure models in: ~/.aiexec/config
+
+CONFIGURATION:
+  File: ~/.aiexec/config
+  Customize:
+  - AI models for each tier (fast/balanced/premium)
+  - Default thinking mode and response language
+  - Smart mode detection (keywords, thresholds)
+  - Security blacklist patterns
+
+  Run installer to create config: ./install.sh
+HELP
+}
+
+clean_cmd() {
+  local s="$1"
+  # First line only
+  s="${s%%$'\n'*}"
+  # Remove backticks
+  s="${s//\`/}"
+  # Trim spaces
+  s="$(sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' <<<"$s")"
+  # Remove prompt symbols (# $ >)
+  s="$(sed -E 's/^[#$>]\s*//' <<<"$s")"
+  # Remove markdown code blocks
+  s="$(sed -E 's/^```[a-zA-Z0-9_-]*//; s/```$//' <<<"$s")"
+  # Remove bash -c / sh -c wrappers
+  s="$(sed -E 's/^bash +-c +//; s/^sh +-c +//' <<<"$s")"
+  echo "$s"
+}
+
+confirm_or_block() {
+  local cmd="$1"
+  local reason="$2"
+  if [[ "$reason" == BLOCK:* ]]; then
+    printf '🛑 COMMAND BLOCKED\nCommand: %s\nReason: %s\n' "$cmd" "${reason#BLOCK: }" 1>&2
+    printf 'Use --force to bypass (NOT recommended).\n' 1>&2
+    exit 2
+  fi
+  printf '⚠️  POTENTIALLY RISKY COMMAND\nCommand: %s\nReason: %s\n' "$cmd" "${reason#ASK: }" 1>&2
+  read -r -p "Proceed? [y/N] " ans
+  [[ "${ans:-}" =~ ^[Yy]$ ]] || { echo "Cancelled." 1>&2; exit 2; }
+}
+
+is_dangerous() {
+  local cmd="$1"
+
+  # BLOCK — extremely destructive
+  local -a BLOCK_PAT=(
+    # rm catastrophic (root, no-preserve-root, wildcards at root)
+    '(^|[[:space:];|&])rm[[:space:]]+.*--no-preserve-root'
+    '(^|[[:space:];|&])rm[[:space:]]+-(rf|fr|r|R)[^#]*[[:space:]]/($|[[:space:]])'
+    '(^|[[:space:];|&])rm[[:space:]]+-(rf|fr)[^#]*(\*|\.\s*/\.\.)'
+    '(^|[[:space:];|&])rm[[:space:]]+-(rf|fr)[[:space:]]+~($|[[:space:]])'
+
+    # fork bomb
+    ':\(\)\s*{\s*:\s*\|\s*:\s*;\s*}\s*;\s*:'
+
+    # disk formatting / wipe / raw writes
+    '(^|[[:space:];|&])mkfs\.(ext[234]|xfs|btrfs|vfat|ntfs)([^#]|$)'
+    '(^|[[:space:];|&])wipefs([^#]|$)'
+    '(^|[[:space:];|&])blkdiscard([^#]|$)'
+    '(^|[[:space:];|&])dd[[:space:]].*of=/dev/(sd[a-z]\d*|nvme[0-9]+n[0-9]+p?[0-9]*|mmcblk[0-9]+p?[0-9]*)'
+
+    # overwrite critical auth files
+    '(^|[[:space:];|&])>(>|)?[[:space:]]*/etc/(passwd|shadow)'
+    '(^|[[:space:];|&])(echo|printf)[^#]*>[[:space:]]*/etc/(passwd|shadow)'
+
+    # curl|wget piped to shell (various spellings)
+    '(curl|wget)[^|]*\|\s*(sh|bash|zsh)[[:space:]]*$'
+    'bash[[:space:]]+-c[[:space:]]+"?\s*\$?\((curl|wget)[^)]*\)'
+    '(curl|wget)[[:space:]].*-[sL]*[[:space:]]+[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(sh|bash)'
+
+    # chmod recursively wide-open on /
+    '(^|[[:space:];|&])chmod[[:space:]]+-R[[:space:]]+7[0-7]{2}[[:space:]]+/($|[[:space:]])'
+
+    # moving critical filesystem directories
+    '(^|[[:space:];|&])mv[[:space:]]+/(bin|boot|dev|etc|lib|lib64|proc|root|sbin|sys|usr)[[:space:]]'
+
+    # completely disable firewall
+    '(^|[[:space:];|&])(ufw[[:space:]]+disable|iptables[[:space:]]+-F)($|[[:space:];|&])'
+
+    # tee to critical files
+    '(^|[[:space:];|&])tee[[:space:]]+>[[:space:]]*/etc/(passwd|shadow)'
+
+    # remove immutable flag
+    '(^|[[:space:];|&])chattr[[:space:]]+-i[[:space:]]+/($|[[:space:]])'
+  )
+
+  # ASK — dangerous but sometimes legitimate
+  local -a ASK_PAT=(
+    # find delete on /
+    '(^|[[:space:];|&])find[[:space:]]+/($|[[:space:]]).* -delete'
+
+    # chown/chmod recursive on /
+    '(^|[[:space:];|&])(chown|chmod)[[:space:]]+-R[[:space:]]+[^;|&]*/($|[[:space:]])'
+
+    # authorized_keys modification
+    '(^|[[:space:];|&])echo.*>>[[:space:]]*~/.ssh/authorized_keys'
+
+    # redirection to raw devices / special
+    '(^|[[:space:];|&])[^#]*>(>|)?[[:space:]]*/dev/(sd[a-z]|nvme|mmcblk|zero)($|[^a-z])'
+
+    # mount/umount root
+    '(^|[[:space:];|&])(mount|umount)[[:space:]]+/($|[[:space:]])'
+
+    # iptables NAT flush
+    '(^|[[:space:];|&])iptables(-save)?[[:space:]]+-t[[:space:]]+nat[[:space:]]+-F'
+
+    # mass kill
+    '(^|[[:space:];|&])(killall|pkill)[[:space:]]+(-9|--signal[[:space:]]+9|--signal[[:space:]]+KILL)'
+
+    # reboot / shutdown (moved to ASK - often intentional on VPS)
+    '(^|[[:space:];|&])(reboot|shutdown([[:space:]]+-h)?[[:space:]]+now|init[[:space:]]+0|init[[:space:]]+6|poweroff|halt)($|[[:space:];|&])'
+
+    # massive permission changes
+    '(^|[[:space:];|&])chmod[[:space:]]+777[[:space:]]+-R'
+
+    # sudo with risky commands
+    '(^|[[:space:];|&])sudo[[:space:]]+(rm|mkfs|dd|wipefs|blkdiscard|chmod|chown|mount|umount)\b'
+
+    # truncate critical files
+    ':[[:space:]]*>[[:space:]]*/(etc|boot|root|usr|bin|sbin)/'
+  )
+
+  # User extensions
+  if [[ -n "$AI_BLACKLIST_EXTRA" ]]; then
+    ASK_PAT+=("$AI_BLACKLIST_EXTRA")
+  fi
+
+  for rx in "${BLOCK_PAT[@]}"; do
+    if grep -Eiq -- "$rx" <<<"$cmd"; then
+      echo "BLOCK: matches critical pattern"
+      return 2
+    fi
+  done
+  for rx in "${ASK_PAT[@]}"; do
+    if grep -Eiq -- "$rx" <<<"$cmd"; then
+      echo "ASK: matches risky pattern"
+      return 1
+    fi
+  done
+  return 0
+}
+
+# ---------- Smart mode detection (for explore) ----------
+should_use_smart_mode() {
+  local prompt="$1"
+  local score=0
+  local kw_matches=0
+  local complex_matches=0
+
+  # Length: long prompt suggests complexity (configurable threshold)
+  if [[ ${#prompt} -gt $SMART_MODE_LENGTH_THRESHOLD ]]; then
+    ((score++))
+  fi
+
+  # Complexity keywords (Italian + English) - count matches, max 2 points
+  # Uses keywords from config (SMART_MODE_KEYWORDS array)
+  for kw in "${SMART_MODE_KEYWORDS[@]}"; do
+    if grep -Eiq "$kw" <<<"$prompt"; then
+      ((kw_matches++))
+    fi
+  done
+  # Add points for keywords (max 2)
+  if [[ $kw_matches -ge 2 ]]; then
+    score=$((score + 2))
+  elif [[ $kw_matches -eq 1 ]]; then
+    score=$((score + 1))
+  fi
+
+  # Complex commands/concepts - count matches, max 2 points
+  # Uses complex terms from config (SMART_MODE_COMPLEX_TERMS array)
+  for term in "${SMART_MODE_COMPLEX_TERMS[@]}"; do
+    if grep -Eiq "$term" <<<"$prompt"; then
+      ((complex_matches++))
+    fi
+  done
+  # Add points for complex terms (max 2)
+  if [[ $complex_matches -ge 2 ]]; then
+    score=$((score + 2))
+  elif [[ $complex_matches -eq 1 ]]; then
+    score=$((score + 1))
+  fi
+
+  # Multi-step indicators (Italian + English)
+  # Uses pattern from config (SMART_MODE_MULTISTEP_PATTERN)
+  if grep -Eiq "$SMART_MODE_MULTISTEP_PATTERN" <<<"$prompt"; then
+    ((score++))
+  fi
+
+  # Threshold: configurable via SMART_MODE_THRESHOLD
+  [[ $score -ge $SMART_MODE_THRESHOLD ]] && return 0 || return 1
+}
+
+# ---------- Interactive thinking mode prompt ----------
+prompt_thinking_mode() {
+  local selected=0  # 0 = NO (default), 1 = YES
+
+  # ANSI colors
+  local BOLD='\033[1m'
+  local GREEN='\033[1;32m'
+  local DIM='\033[2m'
+  local RESET='\033[0m'
+  local CLEAR_LINE='\r\033[K'
+
+  printf '\n🧠 Complexity detected. Use thinking mode (Sonnet + thinking)?\n' >&2
+
+  while true; do
+    # Render options
+    if [[ $selected -eq 0 ]]; then
+      # NO selected (default)
+      printf "${CLEAR_LINE}   ${DIM}[ ]${RESET} YES    ${BOLD}${GREEN}[●]${RESET} NO    ${DIM}(Spacebar: toggle | Enter: confirm)${RESET}" >&2
+    else
+      # YES selected
+      printf "${CLEAR_LINE}   ${BOLD}${GREEN}[●]${RESET} YES    ${DIM}[ ]${RESET} NO    ${DIM}(Spacebar: toggle | Enter: confirm)${RESET}" >&2
+    fi
+
+    # Read single key
+    IFS= read -r -n 1 -s key
+
+    case "$key" in
+      ' ')  # Spacebar - toggle
+        selected=$((1 - selected))
+        ;;
+      '')   # Enter - confirm
+        printf '\n' >&2
+        [[ $selected -eq 1 ]] && return 0 || return 1
+        ;;
+      $'\x1b')  # ESC - cancel (treat as NO)
+        printf '\n' >&2
+        return 1
+        ;;
+    esac
+  done
+}
+
+# ---------- Install aliases (symlinks) ----------
+install_aliases() {
+  local self
+  self="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
+  local bindir="$HOME/.local/bin"
+  mkdir -p "$bindir"
+  for name in ai aix aie; do
+    ln -sf "$self" "$bindir/$name"
+  done
+  echo "✅ Created symlinks: $bindir/ai, $bindir/aix, $bindir/aie"
+  if [[ ":$PATH:" != *":$bindir:"* ]]; then
+    echo ""
+    echo "⚠️  Add to PATH:"
+    echo "   export PATH=\"$bindir:\$PATH\""
+    echo ""
+    echo "Add this line to your ~/.bashrc or ~/.zshrc to make it permanent."
+  fi
+  exit 0
+}
+
+# ---------- Parse flags & prompt ----------
+MODE=""       # simple|exec|explore
+THINKING="$DEFAULT_THINKING"
+# Set default model based on configured tier
+case "$DEFAULT_MODEL_TIER" in
+  fast)     DEFAULT_MODEL="$MODEL_FAST" ;;
+  balanced) DEFAULT_MODEL="$MODEL_BALANCED" ;;
+  premium)  DEFAULT_MODEL="$MODEL_PREMIUM" ;;
+  *)        DEFAULT_MODEL="$MODEL_FAST" ;;  # Fallback to fast
+esac
+MODEL="$DEFAULT_MODEL"
+PROMPT=""
+USER_SET_MODEL=0      # 1 if user explicitly set model
+USER_SET_THINKING=0   # 1 if user explicitly set thinking
+
+# If called via symlink name, auto-set MODE
+case "$(basename "$0")" in
+  ai)  MODE="simple"  ;;
+  aix) MODE="exec"    ;;
+  aie) MODE="explore" ;;
+esac
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --install-aliases) install_aliases ;;
+    -v|--version)      show_version; exit 0 ;;
+    -t|--thinking)     THINKING="true"; USER_SET_THINKING=1; shift ;;
+    # New tier flags
+    -b|--balanced)     MODEL="$MODEL_BALANCED"; USER_SET_MODEL=1; shift ;;
+    -p|--premium)      MODEL="$MODEL_PREMIUM"; USER_SET_MODEL=1; shift ;;
+    # Legacy flags (deprecated but maintained for compatibility)
+    -s|--sonnet)       MODEL="$MODEL_BALANCED"; USER_SET_MODEL=1; printf '⚠️  Flag -s/--sonnet is deprecated. Use -b/--balanced instead.\n' >&2; shift ;;
+    -o|--opus)         MODEL="$MODEL_PREMIUM"; USER_SET_MODEL=1; printf '⚠️  Flag -o/--opus is deprecated. Use -p/--premium instead.\n' >&2; shift ;;
+    -m|--model)        MODEL="${2:-$DEFAULT_MODEL}"; USER_SET_MODEL=1; shift 2 ;;
+    -f|--force)        FORCE=1; shift ;;
+    -r|--raw)          RAW=1; shift ;;
+    -n|--dry-run)      DRYRUN=1; shift ;;
+    -h|--help)         show_help; exit 0 ;;
+    simple|exec|explore) MODE="$1"; shift ;;
+    *) PROMPT+="${PROMPT:+ }$1"; shift ;;
+  esac
+done
+
+[[ -n "$PROMPT" ]] || { echo "❌ Error: specify a request (use -h for help)"; exit 1; }
+[[ -n "$MODE" ]]   || MODE="simple"
+
+# ---------- Auto-detection for explore mode ----------
+if [[ "$MODE" == "explore" ]] && [[ "$AI_AIE_AUTO_SMART" == "true" ]] && [[ $USER_SET_MODEL -eq 0 ]] && [[ $USER_SET_THINKING -eq 0 ]]; then
+  if should_use_smart_mode "$PROMPT"; then
+    # Ask user with interactive toggle (default: NO)
+    if prompt_thinking_mode; then
+      MODEL="$MODEL_BALANCED"
+      THINKING="true"
+      printf '✅ Thinking mode activated (balanced tier + thinking)\n' 1>&2
+    else
+      printf '⚡ Continuing with fast mode\n' 1>&2
+    fi
+  fi
+fi
+
+# ---------- Build system prompt ----------
+SYSTEM_PROMPT='You are a Linux bash expert. Return ONLY a single POSIX-compatible command line.
+No explanations, no markdown, no code fences, no prompts.'
+
+# Thinking toggle → use system instruction instead of undocumented flags
+if [[ "$THINKING" != "true" ]]; then
+  SYSTEM_PROMPT+='
+Disable chain-of-thought; provide only the final command.'
+fi
+
+# ---------- Ask Claude for the command ----------
+ask_command() {
+  local raw
+  raw="$(claude -p \
+    --model "$MODEL" \
+    --max-turns 1 \
+    --output-format text \
+    --append-system-prompt "$SYSTEM_PROMPT" \
+    "What is the shell command for: \"$PROMPT\"? Provide only the command line." 2>/dev/null || true)"
+
+  # empty/whitespace → errore chiaro
+  if [[ -z "${raw//[[:space:]]/}" ]]; then
+    printf '❌ Claude did not return a command. Try rephrasing or -t/--thinking.\n' 1>&2
+    exit 3
+  fi
+
+  if [[ $RAW -eq 1 ]]; then
+    printf '%s' "$raw"
+  else
+    clean_cmd "$raw"
+  fi
+}
+
+# ---------- Modes ----------
+if [[ "$MODE" == "simple" ]]; then
+  CMD="$(ask_command)"
+  # warn only (don't block in print mode)
+  if [[ $FORCE -eq 0 ]]; then
+    danger="$(is_dangerous "$CMD" || true)"; status=$?
+    if [[ $status -ne 0 ]]; then
+      printf '⚠️  Warning: potentially risky command (%s)\n' "${danger#*: }" 1>&2
+    fi
+  fi
+  printf '%s\n' "$CMD"
+  exit 0
+fi
+
+if [[ "$MODE" == "exec" || "$MODE" == "explore" ]]; then
+  CMD="$(ask_command)"
+
+  # Blacklist check (unless --force)
+  if [[ $FORCE -eq 0 ]]; then
+    danger="$(is_dangerous "$CMD" || true)"; status=$?
+    if [[ $status -eq 2 ]]; then
+      confirm_or_block "$CMD" "$danger"
+    elif [[ $status -eq 1 ]]; then
+      confirm_or_block "$CMD" "$danger"
+    fi
+  fi
+
+  printf '🤖 Command: %s\n' "$CMD" 1>&2
+
+  # Dry-run mode
+  [[ $DRYRUN -eq 1 ]] && { echo "[dry-run] not executing." 1>&2; exit 0; }
+
+  # Execute mode (aix)
+  if [[ "$MODE" == "exec" ]]; then
+    bash -lc "$CMD"
+    exit $?
+  fi
+
+  # Explore mode (aie)
+  TMP_OUT="$(mktemp)"
+  cleanup() { rm -f "$TMP_OUT"; }
+  trap cleanup EXIT INT TERM
+
+  set +e
+  bash -lc "$CMD" >"$TMP_OUT" 2>&1
+  EXIT_CODE=$?
+  set -e
+
+  cat "$TMP_OUT"
+  printf '\n%s Exit code: %d\n' "$([[ $EXIT_CODE -eq 0 ]] && echo '✅' || echo '⚠️')" "$EXIT_CODE" 1>&2
+
+  # Build language instruction for AI response
+  LANG_INSTRUCTION=""
+  if [[ "$AI_RESPONSE_LANG" != "English" ]]; then
+    LANG_INSTRUCTION="Respond in $AI_RESPONSE_LANG."
+  fi
+
+  ANALYSIS_PROMPT="Write a brief technical report (5-8 lines) about the executed command:
+
+Command: $CMD
+Exit code: $EXIT_CODE
+Output (truncated to $EXPLORE_OUTPUT_MAX_CHARS chars):
+$(head -c "$EXPLORE_OUTPUT_MAX_CHARS" "$TMP_OUT")
+
+What to include:
+- What it did / what it showed
+- Useful observations
+- If exit!=0: suggest 1-2 NON-destructive commands to investigate
+
+${LANG_INSTRUCTION}"
+
+  REPORT="$(claude -p --model "$MODEL" --max-turns 1 --output-format text "$ANALYSIS_PROMPT" 2>/dev/null || true)"
+
+  printf '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📋 REPORT\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'
+  printf '%s\n' "$REPORT"
+  exit 0
+fi
+
+echo "❌ Invalid mode: $MODE (use ai/aix/aie or simple/exec/explore)" 1>&2
+exit 1

@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Commit Guidelines
+
+**IMPORTANT**: When creating git commits:
+- **DO NOT** add "Generated with Claude Code" footer or "Co-Authored-By: Claude" signature
+- Write clear, concise commit messages that focus on the "why" rather than the "what"
+- Use the repository's existing commit message style (check `git log` for examples)
+- Keep commits clean and professional without AI attribution
+
 ## Project Overview
 
 AI Exec CLI is a fast, secure bash wrapper for Claude Code that provides intelligent command generation and execution with built-in safety features. The project consists of a single bash script (`aiexec`) that interfaces with Claude Code to translate natural language prompts into shell commands.

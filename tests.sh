@@ -4,6 +4,16 @@
 # ========================================
 # Tests all patches from code review
 # All tests should pass with current implementation
+#
+# NOTE: This test suite covers:
+# - is_dangerous() blacklist patterns
+# - should_use_smart_mode() detection logic
+#
+# Features requiring manual testing:
+# - Context file system (~/.aiexec/context.txt)
+# - Clipboard integration (requires xclip/wl-copy/xsel)
+# - Chat mode (aic) - requires Claude Code API
+# See CLAUDE.md "Testing and Development" section for manual test procedures
 
 set -uo pipefail
 export LC_ALL=C

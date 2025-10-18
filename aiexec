@@ -74,6 +74,7 @@ export LC_ALL="${LC_ALL:-C}"
 FORCE=0
 RAW=0
 DRYRUN=0
+NO_CLIPBOARD=0
 
 # Ensure claude CLI is present
 command -v claude >/dev/null 2>&1 || {
@@ -104,9 +105,10 @@ cat << 'HELP'
 AI Exec — Fast and secure interface for Claude Code
 
 USAGE (auto-dispatch by executable name):
-  ai   "<prompt>"     # Generate command only (SAFE)
+  ai   "<prompt>"     # Generate command only (SAFE) + auto-copy to clipboard
   aix  "<prompt>"     # Execute command (with blacklist)
   aie  "<prompt>"     # Execute + analyze (with blacklist)
+  aic  "<prompt>"     # Chat mode (direct AI response, no command)
 
 FLAGS:
   -v, --version       Show version information
@@ -117,13 +119,15 @@ FLAGS:
   -f, --force         Bypass blacklist (DANGEROUS!)
   -r, --raw           Don't clean Claude's output
   -n, --dry-run       Show what would run (for aix/aie), don't execute
-  --install-aliases   Create symlinks ai/aix/aie in ~/.local/bin
+  --no-clipboard      Disable auto-copy to clipboard (for ai mode)
+  --install-aliases   Create symlinks ai/aix/aie/aic in ~/.local/bin
   -h, --help          Show this help
 
 EXAMPLES:
   ai  "list files in current directory"
   aix "find all python files"
   aie "show disk usage"
+  aic "explain what is a symbolic link"
   ai  -b "create database backup"
   aie -p "analyze complex system architecture"
   aix --force "risky command"     # bypass blacklist
@@ -141,6 +145,11 @@ MODELS:
   -p:      Premium tier (maximum capability, higher cost)
 
   Configure models in: ~/.aiexec/config
+
+CONTEXT FILE:
+  File: ~/.aiexec/context.txt
+  If present, content is automatically included in all prompts (max 2000 chars).
+  Useful for project-specific context or common instructions.
 
 CONFIGURATION:
   File: ~/.aiexec/config
@@ -169,6 +178,35 @@ clean_cmd() {
   # Remove bash -c / sh -c wrappers
   s="$(sed -E 's/^bash +-c +//; s/^sh +-c +//' <<<"$s")"
   echo "$s"
+}
+
+load_context() {
+  local context_file="$HOME/.aiexec/context.txt"
+  if [[ -f "$context_file" ]]; then
+    head -c 2000 "$context_file" 2>/dev/null || true
+  fi
+}
+
+copy_to_clipboard() {
+  local text="$1"
+
+  # Try xclip (X11)
+  if command -v xclip >/dev/null 2>&1; then
+    echo -n "$text" | xclip -selection clipboard 2>/dev/null && return 0
+  fi
+
+  # Try wl-copy (Wayland)
+  if command -v wl-copy >/dev/null 2>&1; then
+    echo -n "$text" | wl-copy 2>/dev/null && return 0
+  fi
+
+  # Try xsel (X11 alternative)
+  if command -v xsel >/dev/null 2>&1; then
+    echo -n "$text" | xsel --clipboard 2>/dev/null && return 0
+  fi
+
+  # No clipboard tool available
+  return 1
 }
 
 confirm_or_block() {
@@ -383,10 +421,10 @@ install_aliases() {
   self="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
   local bindir="$HOME/.local/bin"
   mkdir -p "$bindir"
-  for name in ai aix aie; do
+  for name in ai aix aie aic; do
     ln -sf "$self" "$bindir/$name"
   done
-  echo "✅ Created symlinks: $bindir/ai, $bindir/aix, $bindir/aie"
+  echo "✅ Created symlinks: $bindir/ai, $bindir/aix, $bindir/aie, $bindir/aic"
   if [[ ":$PATH:" != *":$bindir:"* ]]; then
     echo ""
     echo "⚠️  Add to PATH:"
@@ -398,7 +436,7 @@ install_aliases() {
 }
 
 # ---------- Parse flags & prompt ----------
-MODE=""       # simple|exec|explore
+MODE=""       # simple|exec|explore|chat
 THINKING="$DEFAULT_THINKING"
 # Set default model based on configured tier
 case "$DEFAULT_MODEL_TIER" in
@@ -417,6 +455,7 @@ case "$(basename "$0")" in
   ai)  MODE="simple"  ;;
   aix) MODE="exec"    ;;
   aie) MODE="explore" ;;
+  aic) MODE="chat"    ;;
 esac
 
 while [[ $# -gt 0 ]]; do
@@ -434,8 +473,9 @@ while [[ $# -gt 0 ]]; do
     -f|--force)        FORCE=1; shift ;;
     -r|--raw)          RAW=1; shift ;;
     -n|--dry-run)      DRYRUN=1; shift ;;
+    --no-clipboard)    NO_CLIPBOARD=1; shift ;;
     -h|--help)         show_help; exit 0 ;;
-    simple|exec|explore) MODE="$1"; shift ;;
+    simple|exec|explore|chat) MODE="$1"; shift ;;
     *) PROMPT+="${PROMPT:+ }$1"; shift ;;
   esac
 done
@@ -469,13 +509,24 @@ fi
 
 # ---------- Ask Claude for the command ----------
 ask_command() {
+  local context
+  context="$(load_context)"
+
+  local prompt_text="What is the shell command for: \"$PROMPT\"? Provide only the command line."
+  if [[ -n "$context" ]]; then
+    prompt_text="Context:
+$context
+
+$prompt_text"
+  fi
+
   local raw
   raw="$(claude -p \
     --model "$MODEL" \
     --max-turns 1 \
     --output-format text \
     --append-system-prompt "$SYSTEM_PROMPT" \
-    "What is the shell command for: \"$PROMPT\"? Provide only the command line." 2>/dev/null || true)"
+    "$prompt_text" 2>/dev/null || true)"
 
   # empty/whitespace → errore chiaro
   if [[ -z "${raw//[[:space:]]/}" ]]; then
@@ -490,6 +541,34 @@ ask_command() {
   fi
 }
 
+# ---------- Ask Claude (chat mode - no command generation) ----------
+ask_ai() {
+  local context
+  context="$(load_context)"
+
+  local full_prompt="$PROMPT"
+  if [[ -n "$context" ]]; then
+    full_prompt="Context:
+$context
+
+Question: $PROMPT"
+  fi
+
+  local response
+  response="$(claude -p \
+    --model "$MODEL" \
+    --max-turns 1 \
+    --output-format text \
+    "$full_prompt" 2>/dev/null || true)"
+
+  if [[ -z "${response//[[:space:]]/}" ]]; then
+    printf '❌ No response from Claude. Try rephrasing or -t/--thinking.\n' 1>&2
+    exit 3
+  fi
+
+  printf '%s\n' "$response"
+}
+
 # ---------- Modes ----------
 if [[ "$MODE" == "simple" ]]; then
   CMD="$(ask_command)"
@@ -501,6 +580,16 @@ if [[ "$MODE" == "simple" ]]; then
     fi
   fi
   printf '%s\n' "$CMD"
+
+  # Copy to clipboard (unless --no-clipboard)
+  if [[ $NO_CLIPBOARD -eq 0 ]]; then
+    if copy_to_clipboard "$CMD"; then
+      printf '\033[1;32m✓ Command copied to clipboard\033[0m\n' 1>&2
+    else
+      printf '\033[2;33m⚠ Clipboard tool not found. Install xclip, wl-copy, or xsel.\033[0m\n' 1>&2
+    fi
+  fi
+
   exit 0
 fi
 
@@ -618,5 +707,11 @@ ${LANG_INSTRUCTION}"
   exit 0
 fi
 
-echo "❌ Invalid mode: $MODE (use ai/aix/aie or simple/exec/explore)" 1>&2
+# Chat mode (aic)
+if [[ "$MODE" == "chat" ]]; then
+  ask_ai
+  exit 0
+fi
+
+echo "❌ Invalid mode: $MODE (use ai/aix/aie/aic or simple/exec/explore/chat)" 1>&2
 exit 1

@@ -9,18 +9,20 @@ source ~/.bashrc
 
 ## ⚡ Base Commands
 ```bash
-ai  <prompt>    # Output only (SAFE)
+ai  <prompt>    # Output only (SAFE) + auto-clipboard
 aix <prompt>    # Execute (WITH BLACKLIST)
 aie <prompt>    # Execute + report (WITH BLACKLIST)
+aic <prompt>    # Chat mode (NO COMMAND, direct AI answer)
 ```
 
 ## 🎯 Flags
 ```bash
--f, --force     # Bypass blacklist (DANGEROUS!)
--r, --raw       # Unclean output
--t, --thinking  # Extended thinking
--b, --balanced  # Balanced tier (better performance)
--p, --premium   # Premium tier (maximum capability)
+-f, --force       # Bypass blacklist (DANGEROUS!)
+-r, --raw         # Unclean output
+-t, --thinking    # Extended thinking
+-b, --balanced    # Balanced tier (better performance)
+-p, --premium     # Premium tier (maximum capability)
+--no-clipboard    # Disable auto-copy (ai mode only)
 ```
 
 ## ⚡ Quick Aliases
@@ -106,6 +108,49 @@ SMART_MODE_LENGTH_THRESHOLD="150" # Default: 150
 
 Changes take effect immediately (no restart needed)!
 
+## 📄 Context File (NEW!)
+
+**Location**: `~/.aiexec/context.txt`
+
+Auto-include context in all prompts!
+
+```bash
+# Create context
+echo "Python project using FastAPI + PostgreSQL" > ~/.aiexec/context.txt
+
+# Now all commands know the context
+ai create a user endpoint  # Knows it's FastAPI
+aic what database am I using  # Knows PostgreSQL
+```
+
+**Features**:
+- Applies to ALL modes (ai, aix, aie, aic)
+- Max 2000 chars (auto-truncated)
+- Silent if file doesn't exist
+
+## 📋 Clipboard Integration (NEW!)
+
+`ai` command auto-copies to clipboard!
+
+```bash
+$ ai list files
+ls -l
+✓ Command copied to clipboard
+
+# Just paste and run
+$ <Ctrl+V> <Enter>
+```
+
+**Requirements (Linux)**:
+- X11: `sudo apt install xclip`
+- Wayland: `sudo apt install wl-clipboard`
+- Fallback: `sudo apt install xsel`
+
+**Disable**:
+```bash
+ai --no-clipboard list files
+```
+
 ## 📊 Error Handling (NEW!)
 
 ### Intelligent Exit Code
@@ -134,16 +179,18 @@ ls -la
 
 ### Normal (safe)
 ```bash
-ai list files
-aix cat file.txt
-aie analyze logs
+ai list files              # Generate command + clipboard
+aix cat file.txt           # Execute immediately
+aie analyze logs           # Execute + AI analysis
+aic explain regex          # Chat mode (no command)
 ```
 
 ### With flags
 ```bash
-ai -b complex query           # Balanced tier
-aix -t find pattern            # Thinking
-aie --force risky command   # Force
+ai -b complex query              # Balanced tier
+aix -t find pattern              # Thinking
+aie --force risky command        # Force
+aic -b explain advanced topic    # Chat with better model
 ```
 
 ### Combinations

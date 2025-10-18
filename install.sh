@@ -134,6 +134,7 @@ export PATH="$HOME/.local/bin:$PATH"
 alias ai='aiexec simple'
 alias aix='aiexec exec'
 alias aie='aiexec explore'
+alias aic='aiexec chat'
 # Optional aliases with common flags
 alias ait='aiexec simple --thinking'
 alias aib='aiexec simple --balanced'

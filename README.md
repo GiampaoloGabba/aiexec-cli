@@ -38,6 +38,7 @@ source ~/.bashrc  # or ~/.zshrc
 
 ### `ai` - Command output only (SAFE)
 Generates the command but DOES NOT execute it. You verify and press enter.
+**Auto-copies to clipboard** for quick pasting!
 
 ```bash
 # Examples
@@ -46,6 +47,8 @@ ai find python files
 ai show disk usage
 ai backup database
 ```
+
+💡 **Tip**: Command is automatically copied to clipboard. Just press `Ctrl+V` and `Enter` to execute!
 
 ### `aix` - Auto-execute
 Generates AND executes the command immediately (with blacklist protection).
@@ -69,6 +72,19 @@ aie check active services
 aie verify network connections
 aie find large files
 ```
+
+### `aic` - Chat mode (NEW!)
+Ask questions directly to the AI without generating commands.
+
+```bash
+# Examples
+aic explain what is a symbolic link
+aic how do I use awk to parse logs
+aic what is the difference between TCP and UDP
+aic explain bash arrays
+```
+
+💡 **Tip**: Perfect for learning, explanations, and general AI assistance!
 
 ## 🎛️ Optional Flags
 
@@ -108,6 +124,13 @@ Don't clean Claude's output.
 
 ```bash
 ai --raw show complex data
+```
+
+### `--no-clipboard` - Disable Clipboard Copy
+Disable automatic clipboard copy in `ai` mode.
+
+```bash
+ai --no-clipboard list files  # Won't copy to clipboard
 ```
 
 ### `-h, --help` - Help
@@ -289,6 +312,78 @@ Extend the safety blacklist with custom patterns:
 ```bash
 AI_BLACKLIST_EXTRA="systemctl.*stop.*nginx|docker.*rm.*-f"
 AI_BLACKLIST_EXTRA="git.*push.*--force|npm.*publish"
+```
+
+### Context File System (NEW!)
+
+**Location**: `~/.aiexec/context.txt`
+
+Automatically include context in all AI prompts. Perfect for project-specific information!
+
+**How it works:**
+- If `~/.aiexec/context.txt` exists, its content is automatically prepended to all prompts
+- Applies to all modes: `ai`, `aix`, `aie`, and `aic`
+- Maximum 2000 characters (automatically truncated)
+- Silent if file doesn't exist (no errors)
+
+**Example:**
+```bash
+# Create context file for your project
+cat > ~/.aiexec/context.txt << 'EOF'
+This is a Python project using FastAPI framework.
+Database: PostgreSQL with SQLAlchemy ORM
+Testing: pytest
+Deployment: Docker containers
+EOF
+
+# Now all commands will have this context
+ai create a new user endpoint
+# AI knows it's FastAPI, will generate appropriate code
+
+aic what database am I using
+# Response: "You're using PostgreSQL with SQLAlchemy ORM"
+```
+
+**Use cases:**
+- Project-specific tech stack information
+- Common coding preferences or conventions
+- Environment details (OS, shell, tools)
+- Reminders about project structure
+
+### Clipboard Integration (NEW!)
+
+The `ai` command automatically copies generated commands to your clipboard for instant pasting!
+
+**Supported platforms:**
+- **Linux X11**: Uses `xclip`
+- **Linux Wayland**: Uses `wl-copy`
+- **Linux fallback**: Uses `xsel`
+
+**Installation (if needed):**
+```bash
+# Debian/Ubuntu
+sudo apt install xclip
+
+# Wayland
+sudo apt install wl-clipboard
+
+# Alternative
+sudo apt install xsel
+```
+
+**Usage:**
+```bash
+$ ai list python files
+find . -name "*.py"
+✓ Command copied to clipboard
+
+# Just paste and run!
+$ <Ctrl+V> <Enter>
+```
+
+**Disable clipboard:**
+```bash
+ai --no-clipboard list files  # Skips clipboard copy
 ```
 
 ### Environment Variables Override
